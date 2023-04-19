@@ -105,6 +105,7 @@ class Script(scripts.Script):
             outputFolder, first_denoise, third_frame_image,
             color_correction_enabled, unfreeze_seed, loopback_source, n_frames):
 
+        n_frames = int(n_frames)
         freeze_seed = not unfreeze_seed
 
         if not os.path.isdir(outputFolder):
@@ -176,6 +177,7 @@ class Script(scripts.Script):
 
         for n in range(batch_count):
             history = []
+            processed_refs = []
             frames = []
             third_image = None
             third_image_index = 0
@@ -219,31 +221,36 @@ class Script(scripts.Script):
                         n_frames_in_iteration = (i + 1) if (i + 1) < n_frames else n_frames
                         p.width = initial_width * n_frames_in_iteration
                         img = Image.new("RGB", (initial_width * n_frames_in_iteration, p.height))
-                        for i in range(n_frames_in_iteration):
-                            if i == 1:
-                                img.paste(loopback_image, (initial_width * i, 0))
-                            elif (i == n_frames_in_iteration - 1): 
-                                img.paste(third_image, (initial_width * i, 0))
+                        img_idx = 0
+                        for ii in range(n_frames_in_iteration):
+                            if ii == 1:
+                                img.paste(loopback_image, (initial_width * ii, 0))
+                            elif (ii == n_frames_in_iteration - 1): 
+                                img.paste(third_image, (initial_width * ii, 0))
                             else:
-                                img.paste(history[len(history) - 1 - i], (initial_width * i, 0))
+                                img.paste(history[len(history) - 1 - img_idx], (initial_width * ii, 0))
+                                img_idx += 1
                             
-                        img.paste(p.init_images[0], (0, 0))
-                        # img.paste(p.init_images[0], (initial_width, 0))
-                        img.paste(loopback_image, (initial_width, 0))
-                        img.paste(third_image, (initial_width * 2, 0))
+                        # img.paste(p.init_images[0], (0, 0))
+                        # # img.paste(p.init_images[0], (initial_width, 0))
+                        # img.paste(loopback_image, (initial_width, 0))
+                        # img.paste(third_image, (initial_width * 2, 0))
                         p.init_images = [img]
                         if color_correction_enabled:
                             p.color_corrections = [processing.setup_color_correction(img)]
 
                         for control_idx, control_img in enumerate(p.control_net_input_image):
                             msk = Image.new("RGB", (initial_width * n_frames_in_iteration, p.height))
-                            for i in range(n_frames_in_iteration):
-                                if i == 1:
-                                    msk.paste(control_img, (initial_width * i, 0))
-                                elif (i == n_frames_in_iteration - 1): 
-                                    msk.paste(reference_imgs[third_image_index], (initial_width * i, 0))
+                            cn_img_idx = 0
+                            for ii in range(n_frames_in_iteration):
+                                if ii == 1:
+                                    msk.paste(control_img, (initial_width * ii, 0))
+                                elif (ii == n_frames_in_iteration - 1): 
+                                    msk.paste(Image.open(reference_imgs[third_image_index]).convert("RGB").resize(
+                                         (initial_width, p.height), Image.ANTIALIAS), (initial_width * ii, 0))
                                 else:
-                                    msk.paste(reference_imgs[len(history) - 1 - i], (initial_width * i, 0))
+                                    msk.paste(processed_refs[len(processed_refs) - 1 - cn_img_idx], (initial_width * ii, 0))
+                                    cn_img_idx += 1
                             # msk.paste(Image.open(reference_imgs[i - 1]).convert("RGB").resize((initial_width, p.height),
                             #                                                                   Image.ANTIALIAS), (0, 0))
                             # msk.paste(control_img, (initial_width, 0))
@@ -341,6 +348,7 @@ class Script(scripts.Script):
                     p.seed = processed.seed + 1
 
                 history.append(init_img)
+                processed_refs.append(ref_image)
                 if opts.samples_save:
                     images.save_image(init_img, p.outpath_samples, "Frame", p.seed, p.prompt, opts.grid_format,
                                       info=info, short_filename=not opts.grid_extended_filename, grid=True, p=p)
