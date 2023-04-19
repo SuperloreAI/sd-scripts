@@ -91,18 +91,19 @@ class Script(scripts.Script):
         unfreeze_seed = gr.Checkbox(label="Unfreeze Seed", value=False, elem_id=self.elem_id("unfreeze_seed"))
         loopback_source = gr.Dropdown(label="Loopback Source", choices=["PreviousFrame", "InputFrame", "FirstGen"],
                                       value="PreviousFrame")
+        n_frames = gr.Number(label="Number of frames to use for comparison", value=3, min=1, max=20)
 
         return [append_interrogation, reference_img_folder, control_net_folder1, control_net_folder1_masks,
                 control_net_folder2, control_net_folder2_masks,
                 control_net_folder3, control_net_folder3_masks, control_net_folder4, control_net_folder4_masks,
                 outputFolder, first_denoise, third_frame_image,
-                color_correction_enabled, unfreeze_seed, loopback_source]
+                color_correction_enabled, unfreeze_seed, loopback_source, n_frames]
 
     def run(self, p, append_interrogation, reference_img_folder, control_net_folder1, control_net_folder1_masks,
             control_net_folder2, control_net_folder2_masks,
             control_net_folder3, control_net_folder3_masks, control_net_folder4, control_net_folder4_masks,
             outputFolder, first_denoise, third_frame_image,
-            color_correction_enabled, unfreeze_seed, loopback_source):
+            color_correction_enabled, unfreeze_seed, loopback_source, n_frames):
 
         freeze_seed = not unfreeze_seed
 
@@ -203,8 +204,17 @@ class Script(scripts.Script):
                         loopback_image = history[0]
 
                     if third_frame_image != "None" and i > 1:
-                        p.width = initial_width * 3
-                        img = Image.new("RGB", (initial_width * 3, p.height))
+                        n_frames_in_iteration = (i + 1) if (i + 1) < n_frames else n_frames
+                        p.width = initial_width * n_frames_in_iteration
+                        img = Image.new("RGB", (initial_width * n_frames_in_iteration, p.height))
+                        for i in range(n_frames_in_iteration):
+                            if i == 1:
+                                img.paste(loopback_image, (initial_width * i, 0))
+                            elif (i == n_frames_in_iteration - 1): 
+                                img.paste(third_image, (initial_width * i, 0))
+                            else:
+                                img.paste(history[len(history) - 1 - i], (initial_width * i, 0))
+                            
                         img.paste(p.init_images[0], (0, 0))
                         # img.paste(p.init_images[0], (initial_width, 0))
                         img.paste(loopback_image, (initial_width, 0))
@@ -214,16 +224,23 @@ class Script(scripts.Script):
                             p.color_corrections = [processing.setup_color_correction(img)]
 
                         for control_idx, control_img in enumerate(p.control_net_input_image):
-                            msk = Image.new("RGB", (initial_width * 3, p.height))
-                            msk.paste(Image.open(reference_imgs[i - 1]).convert("RGB").resize((initial_width, p.height),
-                                                                                              Image.ANTIALIAS), (0, 0))
-                            msk.paste(control_img, (initial_width, 0))
-                            msk.paste(Image.open(reference_imgs[third_image_index]).convert("RGB").resize(
-                                (initial_width, p.height), Image.ANTIALIAS), (initial_width * 2, 0))
+                            msk = Image.new("RGB", (initial_width * n_frames_in_iteration, p.height))
+                            for i in range(n_frames_in_iteration):
+                                if i == 1:
+                                    msk.paste(control_img, (initial_width * i, 0))
+                                elif (i == n_frames_in_iteration - 1): 
+                                    msk.paste(reference_imgs[third_image_index], (initial_width * i, 0))
+                                else:
+                                    msk.paste(reference_imgs[len(history) - 1 - i], (initial_width * i, 0))
+                            # msk.paste(Image.open(reference_imgs[i - 1]).convert("RGB").resize((initial_width, p.height),
+                            #                                                                   Image.ANTIALIAS), (0, 0))
+                            # msk.paste(control_img, (initial_width, 0))
+                            # msk.paste(Image.open(reference_imgs[third_image_index]).convert("RGB").resize(
+                            #     (initial_width, p.height), Image.ANTIALIAS), (initial_width * 2, 0))
 
                             p.control_net_input_image[control_idx] = msk
 
-                        latent_mask = Image.new("RGB", (initial_width * 3, p.height), "black")
+                        latent_mask = Image.new("RGB", (initial_width * n_frames_in_iteration, p.height), "black")
                         latent_draw = ImageDraw.Draw(latent_mask)
                         latent_draw.rectangle((initial_width, 0, initial_width * 2, p.height), fill="white")
                         p.image_mask = latent_mask
