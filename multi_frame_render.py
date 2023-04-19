@@ -119,28 +119,36 @@ class Script(scripts.Script):
         if control_net_folder1:
             cn_files.append([os.path.join(control_net_folder1, x) for x in
                              sorted(os.listdir(control_net_folder1), key=numerical_part)])
+            if control_net_folder1_masks:
+                cn_masks.append([os.path.join(control_net_folder1_masks, x) for x in
+                                 sorted(os.listdir(control_net_folder1_masks), key=numerical_part)])
+            else:
+                cn_masks.append([])
+
         if control_net_folder2:
             cn_files.append([os.path.join(control_net_folder2, x) for x in
                              sorted(os.listdir(control_net_folder2), key=numerical_part)])
+            if control_net_folder2_masks:
+                cn_masks.append([os.path.join(control_net_folder2_masks, x) for x in
+                                 sorted(os.listdir(control_net_folder2_masks), key=numerical_part)])
+            else:
+                cn_masks.append([])
         if control_net_folder3:
             cn_files.append([os.path.join(control_net_folder3, x) for x in
                              sorted(os.listdir(control_net_folder3), key=numerical_part)])
+            if control_net_folder3_masks:
+                cn_masks.append([os.path.join(control_net_folder3_masks, x) for x in
+                                 sorted(os.listdir(control_net_folder3_masks), key=numerical_part)])
+            else:
+                cn_masks.append([])
         if control_net_folder4:
             cn_files.append([os.path.join(control_net_folder4, x) for x in
                              sorted(os.listdir(control_net_folder4), key=numerical_part)])
-
-        if control_net_folder1_masks:
-            cn_masks.append([os.path.join(control_net_folder1_masks, x) for x in
-                             sorted(os.listdir(control_net_folder1_masks), key=numerical_part)])
-        if control_net_folder2_masks:
-            cn_masks.append([os.path.join(control_net_folder2_masks, x) for x in
-                             sorted(os.listdir(control_net_folder2_masks), key=numerical_part)])
-        if control_net_folder3_masks:
-            cn_masks.append([os.path.join(control_net_folder3_masks, x) for x in
-                             sorted(os.listdir(control_net_folder3_masks), key=numerical_part)])
-        if control_net_folder4_masks:
-            cn_masks.append([os.path.join(control_net_folder4_masks, x) for x in
-                             sorted(os.listdir(control_net_folder4_masks), key=numerical_part)])
+            if control_net_folder4_masks:
+                cn_masks.append([os.path.join(control_net_folder4_masks, x) for x in
+                                 sorted(os.listdir(control_net_folder4_masks), key=numerical_part)])
+            else:
+                cn_masks.append([])
 
         loops = len(reference_imgs)
 
@@ -187,9 +195,13 @@ class Script(scripts.Script):
                     image = Image.open(cn_file).convert("RGB").resize((initial_width, p.height), Image.ANTIALIAS)
                     if index_exists(cn_masks, [iii, i]):
                         mask_image = Image.open(cn_masks[iii][i]).convert("L").resize((initial_width, p.height))
-                        mask_thing = ImageOps.fit(image, image.size, centering=(0.5, 0.5))
+                        mask_thing = ImageOps.fit(image, image.size, centering=(0.5, 0.5)).convert("RGBA")
                         mask_thing.putalpha(mask_image)
-                        image = mask_thing.convert("RGB")
+
+                        # Create a new image with only the masked pixels
+                        masked_image = Image.new("RGBA", (initial_width, p.height), color=(0, 0, 0, 0))
+                        masked_image.paste(image, mask=mask_thing)
+                        image = masked_image
 
                     p.control_net_input_image.append(image)
 
